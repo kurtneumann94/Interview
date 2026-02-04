@@ -5,7 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>AI Interviewer</title>
 
-    <!-- jsPDF (para generar el PDF en el navegador) -->
+    <!-- jsPDF -->
     <script src="https://cdn.jsdelivr.net/npm/jspdf@2.5.1/dist/jspdf.umd.min.js"></script>
 
     <style>
@@ -39,6 +39,24 @@
         margin-bottom: 12px;
       }
       .footer { margin-top: 18px; font-size: 12px; color: rgba(232,238,252,0.6); }
+
+      /* Botón flotante */
+      #downloadReportBtn {
+        position: fixed;
+        right: 18px;
+        bottom: 96px; /* arriba del chat */
+        z-index: 999999;
+        display: none;
+        padding: 12px 14px;
+        border-radius: 12px;
+        border: 1px solid rgba(255,255,255,0.15);
+        background: rgba(99,102,241,0.9);
+        color: white;
+        font-weight: 600;
+        cursor: pointer;
+        box-shadow: 0 10px 30px rgba(0,0,0,0.35);
+      }
+      #downloadReportBtn:hover { filter: brightness(1.05); }
     </style>
   </head>
 
@@ -48,17 +66,14 @@
 
       <div class="card">
         <h1>Simulador de entrevista</h1>
-        <p>
-          Practica entrevistas con un entrevistador IA. Responde con naturalidad,
-          como si fuera una entrevista real.
-        </p>
+        <p>Practica entrevistas con un entrevistador IA. Responde con naturalidad, como si fuera una entrevista real.</p>
 
         <p><strong>Cómo usarlo:</strong></p>
         <ol class="steps">
           <li>Abre el chat (abajo a la derecha).</li>
           <li>Escribe lo que te pide el bot (Nombre, Empresa, Puesto, Seniority).</li>
           <li>Contesta las preguntas.</li>
-          <li>Al final recibirás el cierre y podrás descargar tu informe.</li>
+          <li>Al final podrás descargar tu informe en PDF.</li>
         </ol>
 
         <div class="footer">
@@ -67,14 +82,33 @@
       </div>
     </div>
 
-    <!-- Voiceflow + descarga de PDF -->
+    <button id="downloadReportBtn">Descargar informe (PDF)</button>
+
     <script type="text/javascript">
       (function (d, t) {
         var v = d.createElement(t), s = d.getElementsByTagName(t)[0];
 
-        v.onload = function () {
+        // Guardamos el último PDF generado para descargar con click
+        let latestPdf = { blobUrl: null, filename: null };
 
-          // 🔽 EXTENSIÓN PARA DESCARGAR EL PDF
+        function showDownloadButton(blobUrl, filename) {
+          latestPdf.blobUrl = blobUrl;
+          latestPdf.filename = filename;
+
+          const btn = document.getElementById("downloadReportBtn");
+          btn.style.display = "block";
+
+          btn.onclick = () => {
+            const a = document.createElement("a");
+            a.href = latestPdf.blobUrl;
+            a.download = latestPdf.filename || "Interview_Report.pdf";
+            document.body.appendChild(a);
+            a.click();
+            a.remove();
+          };
+        }
+
+        v.onload = function () {
           const DownloadReportExtension = {
             name: "download_report_pdf",
             type: "effect",
@@ -114,21 +148,23 @@
               const safe = (s) => String(s).replace(/[^\w]+/g, "_");
               const filename = `Interview_Report_${safe(candidate)}_${safe(company)}.pdf`;
 
-              doc.save(filename);
+              // Generar PDF como Blob (no descarga automática)
+              const pdfBlob = doc.output("blob");
+              const blobUrl = URL.createObjectURL(pdfBlob);
+
+              showDownloadButton(blobUrl, filename);
             }
           };
 
-          // 🔽 CARGA DEL CHAT DE VOICEFLOW
           window.voiceflow.chat.load({
             verify: { projectID: "6981de99392d1c3e0b9084bf" },
             url: "https://general-runtime.voiceflow.com",
             versionID: "production",
-            voice: {
-              url: "https://runtime-api.voiceflow.com"
-            },
-            assistant: {
-              extensions: [DownloadReportExtension]
-            }
+            voice: { url: "https://runtime-api.voiceflow.com" },
+
+            // OJO: en algunos builds de VF es "extensions" a nivel raíz.
+            // Si no te funciona, cambia a: extensions: [DownloadReportExtension]
+            assistant: { extensions: [DownloadReportExtension] }
           });
         };
 
@@ -137,6 +173,5 @@
         s.parentNode.insertBefore(v, s);
       })(document, "script");
     </script>
-
   </body>
 </html>
