@@ -56,7 +56,7 @@
           <li>Abre el chat (abajo a la derecha).</li>
           <li>Escribe lo que te pide el bot (Nombre, Empresa, Puesto, Seniority).</li>
           <li>Contesta las preguntas.</li>
-          <li>Al final recibirás el cierre y podrás descargar tu informe.</li>
+          <li>Al final podrás descargar tu informe en PDF.</li>
         </ol>
 
         <div class="footer">
@@ -65,22 +65,28 @@
       </div>
     </div>
 
-    <script type="text/javascript">
-      // 1) Función: crea y descarga un PDF desde texto
-      function downloadPdf({ report_text, candidate_name, company, role, seniority }) {
+    <script>
+      // 1) Generar y descargar PDF
+      function downloadPdf(payload) {
         const { jsPDF } = window.jspdf;
         const doc = new jsPDF({ unit: "pt", format: "a4" });
 
+        const report_text = (payload?.report_text || "").toString().trim();
+        const candidate_name = (payload?.candidate_name || "").toString();
+        const company = (payload?.company || "").toString();
+        const role = (payload?.role || "").toString();
+        const seniority = (payload?.seniority || "").toString();
+
         const title = "HR Evaluation Report";
         const meta = [
-          `Candidate: ${candidate_name || ""}`,
-          `Company: ${company || ""}`,
-          `Role: ${role || ""}`,
-          `Seniority: ${seniority || ""}`,
+          candidate_name ? `Candidate: ${candidate_name}` : "",
+          company ? `Company: ${company}` : "",
+          role ? `Role: ${role}` : "",
+          seniority ? `Seniority: ${seniority}` : "",
         ].filter(Boolean).join(" | ");
 
         const marginX = 40;
-        let y = 50;
+        let y = 56;
 
         doc.setFont("helvetica", "bold");
         doc.setFontSize(16);
@@ -89,23 +95,26 @@
 
         doc.setFont("helvetica", "normal");
         doc.setFontSize(10);
-        const metaLines = doc.splitTextToSize(meta, 515);
-        doc.text(metaLines, marginX, y);
-        y += metaLines.length * 12 + 14;
+        const metaLines = doc.splitTextToSize(meta || "", 515);
+        if (metaLines.length) {
+          doc.text(metaLines, marginX, y);
+          y += metaLines.length * 12 + 14;
+        } else {
+          y += 8;
+        }
 
         doc.setFontSize(11);
 
-        const text = (report_text || "").toString().trim();
-        const lines = doc.splitTextToSize(text || "No report text received.", 515);
+        const text = report_text || "No report text received.";
+        const lines = doc.splitTextToSize(text, 515);
 
-        // Paginación simple
         const pageHeight = doc.internal.pageSize.getHeight();
         const bottom = pageHeight - 40;
 
         for (const line of lines) {
           if (y > bottom) {
             doc.addPage();
-            y = 50;
+            y = 56;
           }
           doc.text(line, marginX, y);
           y += 14;
@@ -115,28 +124,21 @@
         doc.save(`HR_Report_${safeName}.pdf`);
       }
 
-      // 2) Listener: Voiceflow Custom Action -> llama downloadPdf()
-      function handleVoiceflowCustomAction(action) {
-        // Debug: mira si realmente llega
-        console.log("VF action received:", action);
-
-        if (!action || !action.type) return;
-
-        // Voiceflow vNext suele mandar type: "custom_action"
-        // y name: "DOWNLOAD_REPORT_PDF"
-        const name = action.name || action.payload?.name;
-        const payload = action.payload || {};
-
-        if (name === "DOWNLOAD_REPORT_PDF") {
-          // Tu JSON está dentro de payload
+      // 2) ✅ Voiceflow EFFECT EXTENSION (esto es lo clave)
+      // Se dispara cuando Voiceflow emite un Custom Action con nombre DOWNLOAD_REPORT_PDF
+      const downloadReportExtension = {
+        name: "DOWNLOAD_REPORT_PDF",
+        type: "effect",
+        match: ({ trace }) => trace?.type === "DOWNLOAD_REPORT_PDF",
+        effect: async ({ trace }) => {
+          // El payload suele venir en trace.payload (según tu Action Body)
+          const payload = trace?.payload || {};
+          console.log("DOWNLOAD_REPORT_PDF payload:", payload);
           downloadPdf(payload);
+        },
+      };
 
-          // Importante: indicar al widget que continúe (si aplica)
-          return { type: "continue" };
-        }
-      }
-
-      // 3) Carga del widget
+      // 3) Cargar widget y registrar extensions
       (function (d, t) {
         var v = d.createElement(t),
           s = d.getElementsByTagName(t)[0];
@@ -148,11 +150,8 @@
             versionID: "production",
             voice: { url: "https://runtime-api.voiceflow.com" },
 
-            // ✅ Esto es lo CLAVE: hook para interceptar acciones
-            // Si en tu versión no funciona "onAction", avísame y te doy el equivalente.
-            onAction: (action) => {
-              const res = handleVoiceflowCustomAction(action);
-              return res;
+            assistant: {
+              extensions: [downloadReportExtension],
             },
           });
         };
