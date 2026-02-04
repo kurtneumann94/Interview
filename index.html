@@ -4,10 +4,6 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>AI Interviewer</title>
-
-    <!-- jsPDF -->
-    <script src="https://cdn.jsdelivr.net/npm/jspdf@2.5.1/dist/jspdf.umd.min.js"></script>
-
     <style>
       body {
         font-family: system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif;
@@ -21,43 +17,28 @@
         padding: 40px 20px;
       }
       .card {
-        background: rgba(255,255,255,0.06);
-        border: 1px solid rgba(255,255,255,0.12);
+        background: rgba(255, 255, 255, 0.06);
+        border: 1px solid rgba(255, 255, 255, 0.12);
         border-radius: 16px;
         padding: 22px;
       }
       h1 { margin: 0 0 8px; font-size: 28px; }
-      p { margin: 0 0 14px; color: rgba(232,238,252,0.85); line-height: 1.4; }
-      .steps { margin-top: 14px; padding-left: 18px; color: rgba(232,238,252,0.85); }
+      p { margin: 0 0 14px; color: rgba(232, 238, 252, 0.85); line-height: 1.4; }
+      .steps { margin-top: 14px; padding-left: 18px; color: rgba(232, 238, 252, 0.85); }
       .badge {
         display: inline-block;
         font-size: 12px;
         padding: 6px 10px;
         border-radius: 999px;
-        background: rgba(99,102,241,0.18);
-        border: 1px solid rgba(99,102,241,0.35);
+        background: rgba(99, 102, 241, 0.18);
+        border: 1px solid rgba(99, 102, 241, 0.35);
         margin-bottom: 12px;
       }
-      .footer { margin-top: 18px; font-size: 12px; color: rgba(232,238,252,0.6); }
-
-      /* Botón flotante */
-      #downloadReportBtn {
-        position: fixed;
-        right: 18px;
-        bottom: 96px; /* arriba del chat */
-        z-index: 999999;
-        display: none;
-        padding: 12px 14px;
-        border-radius: 12px;
-        border: 1px solid rgba(255,255,255,0.15);
-        background: rgba(99,102,241,0.9);
-        color: white;
-        font-weight: 600;
-        cursor: pointer;
-        box-shadow: 0 10px 30px rgba(0,0,0,0.35);
-      }
-      #downloadReportBtn:hover { filter: brightness(1.05); }
+      .footer { margin-top: 18px; font-size: 12px; color: rgba(232, 238, 252, 0.6); }
     </style>
+
+    <!-- jsPDF (gratis) -->
+    <script src="https://cdn.jsdelivr.net/npm/jspdf@2.5.1/dist/jspdf.umd.min.js"></script>
   </head>
 
   <body>
@@ -66,14 +47,16 @@
 
       <div class="card">
         <h1>Simulador de entrevista</h1>
-        <p>Practica entrevistas con un entrevistador IA. Responde con naturalidad, como si fuera una entrevista real.</p>
+        <p>
+          Practica entrevistas con un entrevistador IA. Responde con naturalidad, como si fuera una entrevista real.
+        </p>
 
         <p><strong>Cómo usarlo:</strong></p>
         <ol class="steps">
           <li>Abre el chat (abajo a la derecha).</li>
           <li>Escribe lo que te pide el bot (Nombre, Empresa, Puesto, Seniority).</li>
           <li>Contesta las preguntas.</li>
-          <li>Al final podrás descargar tu informe en PDF.</li>
+          <li>Al final recibirás el cierre y podrás descargar tu informe.</li>
         </ol>
 
         <div class="footer">
@@ -82,89 +65,95 @@
       </div>
     </div>
 
-    <button id="downloadReportBtn">Descargar informe (PDF)</button>
-
     <script type="text/javascript">
-      (function (d, t) {
-        var v = d.createElement(t), s = d.getElementsByTagName(t)[0];
+      // 1) Función: crea y descarga un PDF desde texto
+      function downloadPdf({ report_text, candidate_name, company, role, seniority }) {
+        const { jsPDF } = window.jspdf;
+        const doc = new jsPDF({ unit: "pt", format: "a4" });
 
-        // Guardamos el último PDF generado para descargar con click
-        let latestPdf = { blobUrl: null, filename: null };
+        const title = "HR Evaluation Report";
+        const meta = [
+          `Candidate: ${candidate_name || ""}`,
+          `Company: ${company || ""}`,
+          `Role: ${role || ""}`,
+          `Seniority: ${seniority || ""}`,
+        ].filter(Boolean).join(" | ");
 
-        function showDownloadButton(blobUrl, filename) {
-          latestPdf.blobUrl = blobUrl;
-          latestPdf.filename = filename;
+        const marginX = 40;
+        let y = 50;
 
-          const btn = document.getElementById("downloadReportBtn");
-          btn.style.display = "block";
+        doc.setFont("helvetica", "bold");
+        doc.setFontSize(16);
+        doc.text(title, marginX, y);
+        y += 18;
 
-          btn.onclick = () => {
-            const a = document.createElement("a");
-            a.href = latestPdf.blobUrl;
-            a.download = latestPdf.filename || "Interview_Report.pdf";
-            document.body.appendChild(a);
-            a.click();
-            a.remove();
-          };
+        doc.setFont("helvetica", "normal");
+        doc.setFontSize(10);
+        const metaLines = doc.splitTextToSize(meta, 515);
+        doc.text(metaLines, marginX, y);
+        y += metaLines.length * 12 + 14;
+
+        doc.setFontSize(11);
+
+        const text = (report_text || "").toString().trim();
+        const lines = doc.splitTextToSize(text || "No report text received.", 515);
+
+        // Paginación simple
+        const pageHeight = doc.internal.pageSize.getHeight();
+        const bottom = pageHeight - 40;
+
+        for (const line of lines) {
+          if (y > bottom) {
+            doc.addPage();
+            y = 50;
+          }
+          doc.text(line, marginX, y);
+          y += 14;
         }
 
+        const safeName = (candidate_name || "candidate").replace(/[^\w\-]+/g, "_");
+        doc.save(`HR_Report_${safeName}.pdf`);
+      }
+
+      // 2) Listener: Voiceflow Custom Action -> llama downloadPdf()
+      function handleVoiceflowCustomAction(action) {
+        // Debug: mira si realmente llega
+        console.log("VF action received:", action);
+
+        if (!action || !action.type) return;
+
+        // Voiceflow vNext suele mandar type: "custom_action"
+        // y name: "DOWNLOAD_REPORT_PDF"
+        const name = action.name || action.payload?.name;
+        const payload = action.payload || {};
+
+        if (name === "DOWNLOAD_REPORT_PDF") {
+          // Tu JSON está dentro de payload
+          downloadPdf(payload);
+
+          // Importante: indicar al widget que continúe (si aplica)
+          return { type: "continue" };
+        }
+      }
+
+      // 3) Carga del widget
+      (function (d, t) {
+        var v = d.createElement(t),
+          s = d.getElementsByTagName(t)[0];
+
         v.onload = function () {
-          const DownloadReportExtension = {
-            name: "download_report_pdf",
-            type: "effect",
-
-            match: ({ trace }) =>
-              trace?.type === "custom_action" &&
-              trace?.payload?.name === "DOWNLOAD_REPORT_PDF",
-
-            effect: ({ trace }) => {
-              const payload = trace.payload.payload || {};
-
-              const reportText = payload.report_text || "";
-              const candidate = payload.candidate_name || "Candidate";
-              const company = payload.company || "Company";
-              const role = payload.role || "Role";
-
-              const { jsPDF } = window.jspdf;
-              const doc = new jsPDF({ unit: "pt", format: "a4" });
-
-              const marginX = 40;
-              let y = 50;
-
-              doc.setFont("helvetica", "bold");
-              doc.setFontSize(16);
-              doc.text("HR Evaluation Report", marginX, y);
-
-              y += 20;
-              doc.setFont("helvetica", "normal");
-              doc.setFontSize(11);
-              doc.text(`${candidate} — ${role} @ ${company}`, marginX, y);
-
-              y += 30;
-              doc.setFontSize(10);
-              const lines = doc.splitTextToSize(reportText, 515);
-              doc.text(lines, marginX, y);
-
-              const safe = (s) => String(s).replace(/[^\w]+/g, "_");
-              const filename = `Interview_Report_${safe(candidate)}_${safe(company)}.pdf`;
-
-              // Generar PDF como Blob (no descarga automática)
-              const pdfBlob = doc.output("blob");
-              const blobUrl = URL.createObjectURL(pdfBlob);
-
-              showDownloadButton(blobUrl, filename);
-            }
-          };
-
           window.voiceflow.chat.load({
             verify: { projectID: "6981de99392d1c3e0b9084bf" },
             url: "https://general-runtime.voiceflow.com",
             versionID: "production",
             voice: { url: "https://runtime-api.voiceflow.com" },
 
-            // OJO: en algunos builds de VF es "extensions" a nivel raíz.
-            // Si no te funciona, cambia a: extensions: [DownloadReportExtension]
-            assistant: { extensions: [DownloadReportExtension] }
+            // ✅ Esto es lo CLAVE: hook para interceptar acciones
+            // Si en tu versión no funciona "onAction", avísame y te doy el equivalente.
+            onAction: (action) => {
+              const res = handleVoiceflowCustomAction(action);
+              return res;
+            },
           });
         };
 
