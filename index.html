@@ -4,6 +4,10 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>AI Interviewer</title>
+
+    <!-- jsPDF (para generar el PDF en el navegador) -->
+    <script src="https://cdn.jsdelivr.net/npm/jspdf@2.5.1/dist/jspdf.umd.min.js"></script>
+
     <style>
       body {
         font-family: system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif;
@@ -45,7 +49,8 @@
       <div class="card">
         <h1>Simulador de entrevista</h1>
         <p>
-          Practica entrevistas con un entrevistador IA. Responde con naturalidad, como si fuera una entrevista real.
+          Practica entrevistas con un entrevistador IA. Responde con naturalidad,
+          como si fuera una entrevista real.
         </p>
 
         <p><strong>Cómo usarlo:</strong></p>
@@ -53,7 +58,7 @@
           <li>Abre el chat (abajo a la derecha).</li>
           <li>Escribe lo que te pide el bot (Nombre, Empresa, Puesto, Seniority).</li>
           <li>Contesta las preguntas.</li>
-          <li>Al final recibirás el cierre y el informe.</li>
+          <li>Al final recibirás el cierre y podrás descargar tu informe.</li>
         </ol>
 
         <div class="footer">
@@ -62,26 +67,76 @@
       </div>
     </div>
 
-    <!-- ✅ AQUÍ VA EL SNIPPET DE VOICEFLOW (PEGAR AQUÍ, JUSTO ANTES DE </body>) -->
-<script type="text/javascript">
-  (function(d, t) {
-      var v = d.createElement(t), s = d.getElementsByTagName(t)[0];
-      v.onload = function() {
-        window.voiceflow.chat.load({
-          verify: { projectID: '6981de99392d1c3e0b9084bf' },
-          url: 'https://general-runtime.voiceflow.com',
-          versionID: 'production',
-          voice: {
-            url: "https://runtime-api.voiceflow.com"
-          }
-        });
-      }
-      v.src = "https://cdn.voiceflow.com/widget-next/bundle.mjs"; 
-      v.type = "text/javascript"; 
-      s.parentNode.insertBefore(v, s);
-  })(document, 'script');
-</script>
+    <!-- Voiceflow + descarga de PDF -->
+    <script type="text/javascript">
+      (function (d, t) {
+        var v = d.createElement(t), s = d.getElementsByTagName(t)[0];
 
+        v.onload = function () {
+
+          // 🔽 EXTENSIÓN PARA DESCARGAR EL PDF
+          const DownloadReportExtension = {
+            name: "download_report_pdf",
+            type: "effect",
+
+            match: ({ trace }) =>
+              trace?.type === "custom_action" &&
+              trace?.payload?.name === "DOWNLOAD_REPORT_PDF",
+
+            effect: ({ trace }) => {
+              const payload = trace.payload.payload || {};
+
+              const reportText = payload.report_text || "";
+              const candidate = payload.candidate_name || "Candidate";
+              const company = payload.company || "Company";
+              const role = payload.role || "Role";
+
+              const { jsPDF } = window.jspdf;
+              const doc = new jsPDF({ unit: "pt", format: "a4" });
+
+              const marginX = 40;
+              let y = 50;
+
+              doc.setFont("helvetica", "bold");
+              doc.setFontSize(16);
+              doc.text("HR Evaluation Report", marginX, y);
+
+              y += 20;
+              doc.setFont("helvetica", "normal");
+              doc.setFontSize(11);
+              doc.text(`${candidate} — ${role} @ ${company}`, marginX, y);
+
+              y += 30;
+              doc.setFontSize(10);
+              const lines = doc.splitTextToSize(reportText, 515);
+              doc.text(lines, marginX, y);
+
+              const safe = (s) => String(s).replace(/[^\w]+/g, "_");
+              const filename = `Interview_Report_${safe(candidate)}_${safe(company)}.pdf`;
+
+              doc.save(filename);
+            }
+          };
+
+          // 🔽 CARGA DEL CHAT DE VOICEFLOW
+          window.voiceflow.chat.load({
+            verify: { projectID: "6981de99392d1c3e0b9084bf" },
+            url: "https://general-runtime.voiceflow.com",
+            versionID: "production",
+            voice: {
+              url: "https://runtime-api.voiceflow.com"
+            },
+            assistant: {
+              extensions: [DownloadReportExtension]
+            }
+          });
+        };
+
+        v.src = "https://cdn.voiceflow.com/widget-next/bundle.mjs";
+        v.type = "text/javascript";
+        s.parentNode.insertBefore(v, s);
+      })(document, "script");
+    </script>
 
   </body>
 </html>
